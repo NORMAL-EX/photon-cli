@@ -154,8 +154,7 @@ fn main() {
     let framebuffer = tracer.render();
     let elapsed = t0.elapsed();
 
-    let total_rays =
-        config.width as u64 * config.height as u64 * config.samples_per_pixel as u64;
+    let total_rays = config.width as u64 * config.height as u64 * config.samples_per_pixel as u64;
     let mrays = total_rays as f64 / elapsed.as_secs_f64() / 1e6;
 
     eprintln!(

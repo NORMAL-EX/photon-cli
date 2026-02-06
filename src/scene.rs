@@ -191,14 +191,22 @@ pub struct Checkerboard {
 
 impl Checkerboard {
     pub fn new(color_a: Color, color_b: Color, scale: f64) -> Self {
-        Self { color_a, color_b, scale }
+        Self {
+            color_a,
+            color_b,
+            scale,
+        }
     }
 
     fn pattern_at(&self, point: Point3) -> Color {
         let sines = (self.scale * point.x).sin()
             * (self.scale * point.y).sin()
             * (self.scale * point.z).sin();
-        if sines < 0.0 { self.color_a } else { self.color_b }
+        if sines < 0.0 {
+            self.color_a
+        } else {
+            self.color_b
+        }
     }
 }
 
@@ -234,7 +242,11 @@ pub struct Sphere {
 
 impl Sphere {
     pub fn new(center: Point3, radius: f64, material: impl Material + 'static) -> Self {
-        Self { center, radius, material: Box::new(material) }
+        Self {
+            center,
+            radius,
+            material: Box::new(material),
+        }
     }
 }
 
@@ -246,20 +258,27 @@ impl Hittable for Sphere {
         let c = oc.length_squared() - self.radius * self.radius;
         let discriminant = half_b * half_b - a * c;
 
-        if discriminant < 0.0 { return None; }
+        if discriminant < 0.0 {
+            return None;
+        }
 
         let sqrtd = discriminant.sqrt();
         let mut root = (-half_b - sqrtd) / a;
         if root < t_min || root > t_max {
             root = (-half_b + sqrtd) / a;
-            if root < t_min || root > t_max { return None; }
+            if root < t_min || root > t_max {
+                return None;
+            }
         }
 
         let point = ray.at(root);
         let outward_normal = (point - self.center) / self.radius;
         let mut rec = HitRecord {
-            point, normal: outward_normal, t: root,
-            front_face: true, material: self.material.as_ref(),
+            point,
+            normal: outward_normal,
+            t: root,
+            front_face: true,
+            material: self.material.as_ref(),
         };
         rec.set_face_normal(ray, outward_normal);
         Some(rec)
@@ -281,20 +300,31 @@ pub struct Plane {
 
 impl Plane {
     pub fn new(point: Point3, normal: Vec3, material: impl Material + 'static) -> Self {
-        Self { point, normal: normal.normalized(), material: Box::new(material) }
+        Self {
+            point,
+            normal: normal.normalized(),
+            material: Box::new(material),
+        }
     }
 }
 
 impl Hittable for Plane {
     fn hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<HitRecord<'_>> {
         let denom = ray.direction.dot(self.normal);
-        if denom.abs() < 1e-8 { return None; }
+        if denom.abs() < 1e-8 {
+            return None;
+        }
         let t = (self.point - ray.origin).dot(self.normal) / denom;
-        if t < t_min || t > t_max { return None; }
+        if t < t_min || t > t_max {
+            return None;
+        }
         let point = ray.at(t);
         let mut rec = HitRecord {
-            point, normal: self.normal, t,
-            front_face: true, material: self.material.as_ref(),
+            point,
+            normal: self.normal,
+            t,
+            front_face: true,
+            material: self.material.as_ref(),
         };
         rec.set_face_normal(ray, self.normal);
         Some(rec)
@@ -317,8 +347,14 @@ pub struct Triangle {
 }
 
 impl Triangle {
+    #[allow(dead_code)]
     pub fn new(v0: Point3, v1: Point3, v2: Point3, material: impl Material + 'static) -> Self {
-        Self { v0, v1, v2, material: Box::new(material) }
+        Self {
+            v0,
+            v1,
+            v2,
+            material: Box::new(material),
+        }
     }
 }
 
@@ -328,25 +364,36 @@ impl Hittable for Triangle {
         let edge2 = self.v2 - self.v0;
         let h = ray.direction.cross(edge2);
         let a = edge1.dot(h);
-        if a.abs() < 1e-8 { return None; }
+        if a.abs() < 1e-8 {
+            return None;
+        }
 
         let f = 1.0 / a;
         let s = ray.origin - self.v0;
         let u = f * s.dot(h);
-        if !(0.0..=1.0).contains(&u) { return None; }
+        if !(0.0..=1.0).contains(&u) {
+            return None;
+        }
 
         let q = s.cross(edge1);
         let v = f * ray.direction.dot(q);
-        if v < 0.0 || u + v > 1.0 { return None; }
+        if v < 0.0 || u + v > 1.0 {
+            return None;
+        }
 
         let t = f * edge2.dot(q);
-        if t < t_min || t > t_max { return None; }
+        if t < t_min || t > t_max {
+            return None;
+        }
 
         let point = ray.at(t);
         let outward_normal = edge1.cross(edge2).normalized();
         let mut rec = HitRecord {
-            point, normal: outward_normal, t,
-            front_face: true, material: self.material.as_ref(),
+            point,
+            normal: outward_normal,
+            t,
+            front_face: true,
+            material: self.material.as_ref(),
         };
         rec.set_face_normal(ray, outward_normal);
         Some(rec)
@@ -371,8 +418,15 @@ impl Hittable for Triangle {
 // ─── Bounding Volume Hierarchy ──────────────────────────────────────────────
 
 pub enum BvhNode {
-    Leaf { object: Box<dyn Hittable>, bbox: Aabb },
-    Interior { left: Box<BvhNode>, right: Box<BvhNode>, bbox: Aabb },
+    Leaf {
+        object: Box<dyn Hittable>,
+        bbox: Aabb,
+    },
+    Interior {
+        left: Box<BvhNode>,
+        right: Box<BvhNode>,
+        bbox: Aabb,
+    },
 }
 
 impl BvhNode {
@@ -386,7 +440,8 @@ impl BvhNode {
                 BvhNode::Leaf { object: obj, bbox }
             }
             _ => {
-                let enclosing = objects.iter()
+                let enclosing = objects
+                    .iter()
                     .map(|o| o.bounding_box())
                     .reduce(|a, b| Aabb::surrounding(&a, &b))
                     .unwrap();
@@ -402,7 +457,8 @@ impl BvhNode {
                 let right_objs = objects.split_off(mid);
                 let left = Box::new(BvhNode::build(objects));
                 let right = Box::new(BvhNode::build(right_objs));
-                let bbox = Aabb::surrounding(&left.bounding_box_inner(), &right.bounding_box_inner());
+                let bbox =
+                    Aabb::surrounding(&left.bounding_box_inner(), &right.bounding_box_inner());
                 BvhNode::Interior { left, right, bbox }
             }
         }
@@ -420,11 +476,15 @@ impl Hittable for BvhNode {
     fn hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<HitRecord<'_>> {
         match self {
             BvhNode::Leaf { object, bbox } => {
-                if !bbox.hit(ray, t_min, t_max) { return None; }
+                if !bbox.hit(ray, t_min, t_max) {
+                    return None;
+                }
                 object.hit(ray, t_min, t_max)
             }
             BvhNode::Interior { left, right, bbox } => {
-                if !bbox.hit(ray, t_min, t_max) { return None; }
+                if !bbox.hit(ray, t_min, t_max) {
+                    return None;
+                }
                 let hit_left = left.hit(ray, t_min, t_max);
                 let far = hit_left.as_ref().map_or(t_max, |h| h.t);
                 let hit_right = right.hit(ray, t_min, far);

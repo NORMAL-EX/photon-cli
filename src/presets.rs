@@ -147,6 +147,7 @@ fn build_showcase() -> SceneDescription {
     }
 }
 
+#[allow(clippy::vec_init_then_push)]
 fn build_cornell() -> SceneDescription {
     let mut objects: Vec<Box<dyn Hittable>> = Vec::new();
 
@@ -214,6 +215,7 @@ fn build_cornell() -> SceneDescription {
     }
 }
 
+#[allow(clippy::vec_init_then_push)]
 fn build_minimal() -> SceneDescription {
     let mut objects: Vec<Box<dyn Hittable>> = Vec::new();
 
@@ -221,11 +223,7 @@ fn build_minimal() -> SceneDescription {
     objects.push(Box::new(Sphere::new(
         Point3::new(0.0, -100.5, -1.0),
         100.0,
-        Checkerboard::new(
-            Color::new(0.1, 0.1, 0.1),
-            Color::new(0.9, 0.9, 0.9),
-            15.0,
-        ),
+        Checkerboard::new(Color::new(0.1, 0.1, 0.1), Color::new(0.9, 0.9, 0.9), 15.0),
     )));
 
     // Chrome sphere
@@ -287,7 +285,11 @@ fn build_stress() -> SceneDescription {
         );
         let radius = rng.gen_range(0.08..0.35);
         let albedo = Color::new(rng.gen(), rng.gen(), rng.gen());
-        objects.push(Box::new(Sphere::new(center, radius, Lambertian::new(albedo))));
+        objects.push(Box::new(Sphere::new(
+            center,
+            radius,
+            Lambertian::new(albedo),
+        )));
     }
 
     SceneDescription {

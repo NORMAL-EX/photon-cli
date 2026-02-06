@@ -200,9 +200,19 @@ fn display_halfblock(out: &mut impl Write, fb: &Framebuffer) {
             let (tr, tg, tb) = fb.get(x, row * 2).to_rgb8();
             let (br, bg, bb) = fb.get(x, row * 2 + 1).to_rgb8();
             let _ = write!(
-                out, "{}",
-                "▀".with(style::Color::Rgb { r: tr, g: tg, b: tb })
-                   .on(style::Color::Rgb { r: br, g: bg, b: bb })
+                out,
+                "{}",
+                "▀"
+                    .with(style::Color::Rgb {
+                        r: tr,
+                        g: tg,
+                        b: tb
+                    })
+                    .on(style::Color::Rgb {
+                        r: br,
+                        g: bg,
+                        b: bb
+                    })
             );
         }
         let _ = writeln!(out);
@@ -248,9 +258,14 @@ fn display_braille(out: &mut impl Write, fb: &Framebuffer) {
             let mut lit_count = 0u32;
 
             let offsets: [(u32, u32, u8); 8] = [
-                (0, 0, 0), (0, 1, 1), (0, 2, 2),
-                (1, 0, 3), (1, 1, 4), (1, 2, 5),
-                (0, 3, 6), (1, 3, 7),
+                (0, 0, 0),
+                (0, 1, 1),
+                (0, 2, 2),
+                (1, 0, 3),
+                (1, 1, 4),
+                (1, 2, 5),
+                (0, 3, 6),
+                (1, 3, 7),
             ];
 
             for &(dx, dy, bit) in &offsets {
@@ -274,7 +289,8 @@ fn display_braille(out: &mut impl Write, fb: &Framebuffer) {
             let braille_char = char::from_u32(0x2800 + pattern as u32).unwrap_or(' ');
             let (r, g, b) = avg_color.to_rgb8();
             let _ = write!(
-                out, "{}",
+                out,
+                "{}",
                 braille_char.to_string().with(style::Color::Rgb { r, g, b })
             );
         }
