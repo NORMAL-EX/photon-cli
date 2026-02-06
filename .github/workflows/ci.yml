@@ -8,6 +8,9 @@ on:
   release:
     types: [created]
 
+permissions:
+  contents: write
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -122,13 +125,12 @@ jobs:
 
       - name: Upload release asset (Unix)
         if: runner.os != 'Windows'
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: ${{ matrix.artifact }}.tar.gz
 
       - name: Upload release asset (Windows)
         if: runner.os == 'Windows'
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: ${{ matrix.artifact }}.zip
-
