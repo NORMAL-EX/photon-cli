@@ -6,10 +6,12 @@
 //! ## Architecture
 //!
 //! The renderer implements a standard unidirectional path tracer with:
-//! - **Geometric primitives**: Sphere, Plane, Triangle with BVH acceleration
-//! - **Materials**: Lambertian, Metal, Dielectric (glass), Emissive, Checkerboard
+//! - **Geometric primitives**: Sphere, Plane, Triangle, Quad, Disk with BVH acceleration
+//! - **Materials**: Lambertian, Metal, Dielectric (glass), Emissive, Checkerboard, Gradient
 //! - **Camera**: Thin-lens model with configurable DoF (depth of field)
 //! - **Output modes**: Braille (2×4 subpixel), TrueColor, HalfBlock, ASCII
+//! - **Tone mapping**: None, Reinhard, ACES filmic
+//! - **Export**: PPM image file output
 //!
 //! ## Rendering equation
 //!
@@ -30,8 +32,7 @@ mod scene;
 
 use clap::Parser;
 use presets::ScenePreset;
-use renderer::{display_framebuffer, OutputMode, PathTracer, RenderConfig};
-use std::time::Instant;
+use renderer::{display_framebuffer, OutputMode, PathTracer, RenderConfig, ToneMapOp};
 
 /// photon-cli — render 3D scenes in your terminal
 #[derive(Parser, Debug)]
@@ -41,12 +42,14 @@ use std::time::Instant;
     about = "A blazingly fast terminal ray tracer written in Rust 🦀",
     long_about = "Renders physically-based 3D scenes directly in your terminal using \
                   Monte Carlo path tracing. Supports multiple output modes from high-res \
-                  braille patterns to simple ASCII art.",
+                  braille patterns to simple ASCII art, with ACES/Reinhard tone mapping \
+                  and PPM image export.",
     after_help = "EXAMPLES:\n  \
                   photon-cli --scene showcase --mode halfblock\n  \
-                  photon-cli --scene cornell --spp 200 --bounces 20\n  \
+                  photon-cli --scene cornell --spp 200 --bounces 20 --tonemap aces\n  \
                   photon-cli --scene minimal --width 240 --height 120 --mode braille\n  \
-                  photon-cli --scene stress --spp 10"
+                  photon-cli --scene gallery --spp 64 --tonemap reinhard\n  \
+                  photon-cli --scene stress --spp 10 --output render.ppm"
 )]
 struct Cli {
     /// Scene preset to render
@@ -75,9 +78,21 @@ struct Cli {
     #[arg(short, long, value_enum, default_value_t = CliOutputMode::Halfblock)]
     mode: CliOutputMode,
 
+    /// Tone mapping operator for HDR → LDR conversion
+    #[arg(short, long, value_enum, default_value_t = CliToneMap::None)]
+    tonemap: CliToneMap,
+
     /// Disable gamma correction (output linear radiance values directly)
     #[arg(long)]
     no_gamma: bool,
+
+    /// Save rendered image to a PPM file (in addition to terminal display)
+    #[arg(short, long)]
+    output: Option<String>,
+
+    /// Suppress terminal display (useful with --output for headless rendering)
+    #[arg(long)]
+    quiet: bool,
 }
 
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
@@ -103,6 +118,26 @@ impl From<CliOutputMode> for OutputMode {
     }
 }
 
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+enum CliToneMap {
+    /// No tone mapping — clamp to [0,1] directly
+    None,
+    /// Reinhard global operator: L/(1+L)
+    Reinhard,
+    /// ACES filmic curve (cinematic look)
+    Aces,
+}
+
+impl From<CliToneMap> for ToneMapOp {
+    fn from(t: CliToneMap) -> Self {
+        match t {
+            CliToneMap::None => ToneMapOp::None,
+            CliToneMap::Reinhard => ToneMapOp::Reinhard,
+            CliToneMap::Aces => ToneMapOp::Aces,
+        }
+    }
+}
+
 fn print_header(scene_name: &str, config: &RenderConfig) {
     let mode_name = match config.output_mode {
         OutputMode::Braille => "Braille (2×4 subpixel)",
@@ -110,18 +145,24 @@ fn print_header(scene_name: &str, config: &RenderConfig) {
         OutputMode::HalfBlock => "HalfBlock (2× vertical)",
         OutputMode::Ascii => "ASCII grayscale",
     };
+    let tonemap_name = match config.tone_map {
+        ToneMapOp::None => "None (clamp)",
+        ToneMapOp::Reinhard => "Reinhard",
+        ToneMapOp::Aces => "ACES Filmic",
+    };
     eprintln!();
     eprintln!("  ╔═══════════════════════════════════════════════╗");
     eprintln!("  ║  photon-cli 🔬  Terminal Path Tracer          ║");
     eprintln!("  ╚═══════════════════════════════════════════════╝");
     eprintln!();
-    eprintln!("  Scene:    {scene_name}");
+    eprintln!("  Scene:      {scene_name}");
     eprintln!(
         "  Resolution: {}×{} ({mode_name})",
         config.width, config.height
     );
-    eprintln!("  Samples:  {} spp", config.samples_per_pixel);
-    eprintln!("  Bounces:  {}", config.max_bounces);
+    eprintln!("  Samples:    {} spp", config.samples_per_pixel);
+    eprintln!("  Bounces:    {}", config.max_bounces);
+    eprintln!("  Tone map:   {tonemap_name}");
     eprintln!();
 }
 
@@ -139,9 +180,18 @@ fn main() {
     config.samples_per_pixel = cli.spp;
     config.max_bounces = cli.bounces;
     config.output_mode = cli.mode.into();
+    config.tone_map = cli.tonemap.into();
     config.gamma = !cli.no_gamma;
 
     print_header(scene_name, &config);
+
+    // Print BVH diagnostics
+    eprintln!(
+        "  BVH:        {} objects, depth {}",
+        world.leaf_count(),
+        world.depth()
+    );
+    eprintln!();
 
     let tracer = PathTracer {
         scene: &world,
@@ -150,22 +200,23 @@ fn main() {
         sky,
     };
 
-    let t0 = Instant::now();
-    let framebuffer = tracer.render();
-    let elapsed = t0.elapsed();
-
-    let total_rays = config.width as u64 * config.height as u64 * config.samples_per_pixel as u64;
-    let mrays = total_rays as f64 / elapsed.as_secs_f64() / 1e6;
-
-    eprintln!(
-        "  Time: {:.2}s | {:.2}M rays | {:.2} Mrays/s",
-        elapsed.as_secs_f64(),
-        total_rays as f64 / 1e6,
-        mrays
-    );
+    let (framebuffer, stats) = tracer.render();
+    eprintln!();
+    stats.print_summary();
     eprintln!();
 
-    display_framebuffer(&framebuffer, config.output_mode);
+    // Terminal display
+    if !cli.quiet {
+        display_framebuffer(&framebuffer, config.output_mode);
+    }
+
+    // PPM export
+    if let Some(ref path) = cli.output {
+        match framebuffer.write_ppm(path) {
+            Ok(()) => eprintln!("  Saved: {path}"),
+            Err(e) => eprintln!("  Error saving {path}: {e}"),
+        }
+    }
 
     eprintln!();
     eprintln!("  Rendered with photon-cli v{}", env!("CARGO_PKG_VERSION"));

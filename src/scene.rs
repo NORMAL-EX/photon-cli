@@ -23,10 +23,8 @@ impl<'a> HitRecord<'a> {
     }
 }
 
-// ─── Material Trait (dyn-compatible via &mut dyn RngCore) ───────────────────
+// ─── Material Trait ─────────────────────────────────────────────────────────
 
-/// The material BRDF abstraction. Uses `&mut dyn rand::RngCore` for
-/// dyn-compatibility, enabling heterogeneous material storage via trait objects.
 pub trait Material: Send + Sync {
     fn scatter(
         &self,
@@ -225,6 +223,44 @@ impl Material for Checkerboard {
     }
 }
 
+// ─── Gradient Material ──────────────────────────────────────────────────────
+
+/// A procedural material that interpolates between two colors based on surface
+/// normal orientation. Produces a smooth gradient effect driven by the dot
+/// product between the hit normal and a configurable axis direction.
+pub struct GradientMaterial {
+    pub color_a: Color,
+    pub color_b: Color,
+    pub axis: Vec3,
+}
+
+impl GradientMaterial {
+    pub fn new(color_a: Color, color_b: Color, axis: Vec3) -> Self {
+        Self {
+            color_a,
+            color_b,
+            axis: axis.normalized(),
+        }
+    }
+}
+
+impl Material for GradientMaterial {
+    fn scatter(
+        &self,
+        _ray: &Ray,
+        hit: &HitRecord,
+        rng: &mut dyn rand::RngCore,
+    ) -> Option<(Ray, Color)> {
+        let mut scatter_dir = hit.normal + Vec3::random_unit_vector(rng);
+        if scatter_dir.near_zero() {
+            scatter_dir = hit.normal;
+        }
+        let t = (hit.normal.dot(self.axis) * 0.5 + 0.5).clamp(0.0, 1.0);
+        let albedo = self.color_a.lerp(self.color_b, t);
+        Some((Ray::new(hit.point, scatter_dir), albedo))
+    }
+}
+
 // ─── Hittable Trait ─────────────────────────────────────────────────────────
 
 pub trait Hittable: Send + Sync {
@@ -292,6 +328,7 @@ impl Hittable for Sphere {
 
 // ─── Infinite Plane ─────────────────────────────────────────────────────────
 
+#[allow(dead_code)]
 pub struct Plane {
     pub point: Point3,
     pub normal: Vec3,
@@ -299,6 +336,7 @@ pub struct Plane {
 }
 
 impl Plane {
+    #[allow(dead_code)]
     pub fn new(point: Point3, normal: Vec3, material: impl Material + 'static) -> Self {
         Self {
             point,
@@ -415,6 +453,155 @@ impl Hittable for Triangle {
     }
 }
 
+// ─── Axis-Aligned Quad (Rectangle) ─────────────────────────────────────────
+
+/// A finite rectangle defined by two edge vectors and an origin point.
+/// Parameterized as: P = origin + u·edge_u + v·edge_v, for (u, v) ∈ [0,1]².
+///
+/// Hit detection: implicit plane equation → parametric bounds check on (u,v).
+pub struct Quad {
+    pub origin: Point3,
+    pub edge_u: Vec3,
+    pub edge_v: Vec3,
+    pub normal: Vec3,
+    pub d: f64,
+    pub w: Vec3,
+    pub material: Box<dyn Material>,
+}
+
+impl Quad {
+    pub fn new(
+        origin: Point3,
+        edge_u: Vec3,
+        edge_v: Vec3,
+        material: impl Material + 'static,
+    ) -> Self {
+        let n = edge_u.cross(edge_v);
+        let normal = n.normalized();
+        let d = normal.dot(origin);
+        let w = n / n.dot(n);
+        Self {
+            origin,
+            edge_u,
+            edge_v,
+            normal,
+            d,
+            w,
+            material: Box::new(material),
+        }
+    }
+}
+
+impl Hittable for Quad {
+    fn hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<HitRecord<'_>> {
+        let denom = self.normal.dot(ray.direction);
+        if denom.abs() < 1e-8 {
+            return None;
+        }
+
+        let t = (self.d - self.normal.dot(ray.origin)) / denom;
+        if t < t_min || t > t_max {
+            return None;
+        }
+
+        let intersection = ray.at(t);
+        let planar_hitpt = intersection - self.origin;
+        let alpha = self.w.dot(planar_hitpt.cross(self.edge_v));
+        let beta = self.w.dot(self.edge_u.cross(planar_hitpt));
+
+        if !(0.0..=1.0).contains(&alpha) || !(0.0..=1.0).contains(&beta) {
+            return None;
+        }
+
+        let mut rec = HitRecord {
+            point: intersection,
+            normal: self.normal,
+            t,
+            front_face: true,
+            material: self.material.as_ref(),
+        };
+        rec.set_face_normal(ray, self.normal);
+        Some(rec)
+    }
+
+    fn bounding_box(&self) -> Aabb {
+        let eps = Vec3::new(1e-4, 1e-4, 1e-4);
+        let p0 = self.origin;
+        let p1 = self.origin + self.edge_u;
+        let p2 = self.origin + self.edge_v;
+        let p3 = self.origin + self.edge_u + self.edge_v;
+        let min = Point3::new(
+            p0.x.min(p1.x).min(p2.x).min(p3.x),
+            p0.y.min(p1.y).min(p2.y).min(p3.y),
+            p0.z.min(p1.z).min(p2.z).min(p3.z),
+        );
+        let max = Point3::new(
+            p0.x.max(p1.x).max(p2.x).max(p3.x),
+            p0.y.max(p1.y).max(p2.y).max(p3.y),
+            p0.z.max(p1.z).max(p2.z).max(p3.z),
+        );
+        Aabb::new(min - eps, max + eps)
+    }
+}
+
+// ─── Disk ───────────────────────────────────────────────────────────────────
+
+/// A circular disk primitive. Ray-plane intersection followed by radius check.
+pub struct Disk {
+    pub center: Point3,
+    pub normal: Vec3,
+    pub radius: f64,
+    pub material: Box<dyn Material>,
+}
+
+impl Disk {
+    pub fn new(
+        center: Point3,
+        normal: Vec3,
+        radius: f64,
+        material: impl Material + 'static,
+    ) -> Self {
+        Self {
+            center,
+            normal: normal.normalized(),
+            radius,
+            material: Box::new(material),
+        }
+    }
+}
+
+impl Hittable for Disk {
+    fn hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<HitRecord<'_>> {
+        let denom = ray.direction.dot(self.normal);
+        if denom.abs() < 1e-8 {
+            return None;
+        }
+        let t = (self.center - ray.origin).dot(self.normal) / denom;
+        if t < t_min || t > t_max {
+            return None;
+        }
+        let point = ray.at(t);
+        let dist_sq = (point - self.center).length_squared();
+        if dist_sq > self.radius * self.radius {
+            return None;
+        }
+        let mut rec = HitRecord {
+            point,
+            normal: self.normal,
+            t,
+            front_face: true,
+            material: self.material.as_ref(),
+        };
+        rec.set_face_normal(ray, self.normal);
+        Some(rec)
+    }
+
+    fn bounding_box(&self) -> Aabb {
+        let r = Vec3::new(self.radius, self.radius, self.radius);
+        Aabb::new(self.center - r, self.center + r)
+    }
+}
+
 // ─── Bounding Volume Hierarchy ──────────────────────────────────────────────
 
 pub enum BvhNode {
@@ -470,6 +657,22 @@ impl BvhNode {
             BvhNode::Interior { bbox, .. } => *bbox,
         }
     }
+
+    /// Returns the total number of leaf nodes in the BVH.
+    pub fn leaf_count(&self) -> usize {
+        match self {
+            BvhNode::Leaf { .. } => 1,
+            BvhNode::Interior { left, right, .. } => left.leaf_count() + right.leaf_count(),
+        }
+    }
+
+    /// Returns the maximum depth of the BVH tree.
+    pub fn depth(&self) -> usize {
+        match self {
+            BvhNode::Leaf { .. } => 1,
+            BvhNode::Interior { left, right, .. } => 1 + left.depth().max(right.depth()),
+        }
+    }
 }
 
 impl Hittable for BvhNode {
@@ -481,7 +684,9 @@ impl Hittable for BvhNode {
                 }
                 object.hit(ray, t_min, t_max)
             }
-            BvhNode::Interior { left, right, bbox } => {
+            BvhNode::Interior {
+                left, right, bbox, ..
+            } => {
                 if !bbox.hit(ray, t_min, t_max) {
                     return None;
                 }

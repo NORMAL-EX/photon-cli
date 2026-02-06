@@ -15,6 +15,7 @@ pub struct RenderConfig {
     pub max_bounces: u32,
     pub output_mode: OutputMode,
     pub gamma: bool,
+    pub tone_map: ToneMapOp,
 }
 
 impl Default for RenderConfig {
@@ -26,6 +27,7 @@ impl Default for RenderConfig {
             max_bounces: 12,
             output_mode: OutputMode::TrueColor,
             gamma: true,
+            tone_map: ToneMapOp::None,
         }
     }
 }
@@ -40,6 +42,60 @@ pub enum OutputMode {
     HalfBlock,
     /// ASCII grayscale density ramp.
     Ascii,
+}
+
+// ─── Tone Mapping Operators ─────────────────────────────────────────────────
+
+/// Tone mapping operators for HDR → LDR conversion. These compress the
+/// high dynamic range radiance values into the displayable [0,1] range
+/// while preserving perceptual contrast and color fidelity.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ToneMapOp {
+    /// No tone mapping — clamp to [0,1] directly.
+    None,
+    /// Reinhard global operator: L_d = L / (1 + L). Simple and robust,
+    /// compresses highlights while preserving shadow detail. Works well
+    /// for scenes with moderate dynamic range.
+    Reinhard,
+    /// ACES filmic tone mapping (Narkowicz 2015 fit). The Academy Color
+    /// Encoding System curve used in film production — produces rich,
+    /// cinematic colors with a characteristic S-curve that lifts shadows
+    /// and rolls off highlights smoothly.
+    Aces,
+}
+
+impl ToneMapOp {
+    /// Applies the tone mapping operator to a linear HDR color value.
+    pub fn apply(self, color: Color) -> Color {
+        match self {
+            ToneMapOp::None => color,
+            ToneMapOp::Reinhard => {
+                // Reinhard global operator: x / (1 + x) per channel
+                Color::new(
+                    color.x / (1.0 + color.x),
+                    color.y / (1.0 + color.y),
+                    color.z / (1.0 + color.z),
+                )
+            }
+            ToneMapOp::Aces => {
+                // ACES filmic curve (Narkowicz 2015 approximation):
+                //   f(x) = (x(2.51x + 0.03)) / (x(2.43x + 0.59) + 0.14)
+                fn aces_channel(x: f64) -> f64 {
+                    let a = 2.51;
+                    let b = 0.03;
+                    let c = 2.43;
+                    let d = 0.59;
+                    let e = 0.14;
+                    ((x * (a * x + b)) / (x * (c * x + d) + e)).clamp(0.0, 1.0)
+                }
+                Color::new(
+                    aces_channel(color.x),
+                    aces_channel(color.y),
+                    aces_channel(color.z),
+                )
+            }
+        }
+    }
 }
 
 // ─── Framebuffer ────────────────────────────────────────────────────────────
@@ -68,12 +124,105 @@ impl Framebuffer {
     pub fn get(&self, x: u32, y: u32) -> Color {
         self.pixels[(y * self.width + x) as usize]
     }
+
+    /// Export the framebuffer as a PPM (Portable Pixmap) image file.
+    /// PPM P6 format: binary RGB, one byte per channel, no compression.
+    /// This produces a lossless image that can be viewed with most image
+    /// viewers or converted to PNG/JPEG with ImageMagick.
+    pub fn write_ppm(&self, path: &str) -> io::Result<()> {
+        let mut file = io::BufWriter::new(std::fs::File::create(path)?);
+        write!(file, "P6\n{} {}\n255\n", self.width, self.height)?;
+        for pixel in &self.pixels {
+            let c = pixel.saturate();
+            let r = (c.x * 255.999) as u8;
+            let g = (c.y * 255.999) as u8;
+            let b = (c.z * 255.999) as u8;
+            file.write_all(&[r, g, b])?;
+        }
+        file.flush()?;
+        Ok(())
+    }
+}
+
+// ─── Render Statistics ──────────────────────────────────────────────────────
+
+/// Aggregate statistics collected during rendering for diagnostic output.
+pub struct RenderStats {
+    pub total_rays: u64,
+    pub elapsed_secs: f64,
+    pub width: u32,
+    pub height: u32,
+    pub spp: u32,
+}
+
+impl RenderStats {
+    pub fn mrays_per_sec(&self) -> f64 {
+        self.total_rays as f64 / self.elapsed_secs / 1e6
+    }
+
+    pub fn print_summary(&self) {
+        let bar_width = 30;
+        let fill = "━".repeat(bar_width);
+        eprintln!("  {fill}");
+        eprintln!("  Time:     {:.2}s", self.elapsed_secs);
+        eprintln!("  Rays:     {:.2}M total", self.total_rays as f64 / 1e6);
+        eprintln!("  Speed:    {:.2} Mrays/s", self.mrays_per_sec());
+        eprintln!(
+            "  Image:    {}×{} @ {} spp",
+            self.width, self.height, self.spp
+        );
+        eprintln!("  {fill}");
+    }
+}
+
+// ─── Progress Reporter ──────────────────────────────────────────────────────
+
+/// A progress bar that renders to stderr with percentage, ETA, and a visual
+/// bar using Unicode block characters for smooth sub-character progress.
+struct ProgressBar {
+    total: u32,
+    done: u32,
+    last_pct: u32,
+    start: std::time::Instant,
+}
+
+impl ProgressBar {
+    fn new(total: u32) -> Self {
+        Self {
+            total,
+            done: 0,
+            last_pct: 0,
+            start: std::time::Instant::now(),
+        }
+    }
+
+    fn tick(&mut self) {
+        self.done += 1;
+        let pct = self.done * 100 / self.total;
+        if pct != self.last_pct {
+            let elapsed = self.start.elapsed().as_secs_f64();
+            let rate = self.done as f64 / elapsed;
+            let remaining = (self.total - self.done) as f64 / rate;
+            let bar_width = 24;
+            let filled = (pct as usize * bar_width) / 100;
+            let empty = bar_width - filled;
+            let bar = format!("{}{}", "█".repeat(filled), "░".repeat(empty));
+            eprint!("\r  Rendering: │{bar}│ {pct:3}%  ETA {:.0}s   ", remaining);
+            self.last_pct = pct;
+        }
+    }
+
+    fn finish(&self) {
+        let elapsed = self.start.elapsed().as_secs_f64();
+        let bar = "█".repeat(24);
+        eprintln!("\r  Rendering: │{bar}│ 100%  {:.2}s       ", elapsed);
+    }
 }
 
 // ─── Path Tracer Integrator ─────────────────────────────────────────────────
 
 /// Monte Carlo path tracing integrator solving the rendering equation:
-///   L_o(p, w_o) = L_e(p, w_o) + integral f_r * L_i * cos(theta) dw
+///   L_o(p, ω_o) = L_e(p, ω_o) + ∫_Ω f_r(p, ω_i, ω_o) · L_i(p, ω_i) · |cos θ_i| dω_i
 /// via importance-sampling the BRDF at each bounce.
 pub struct PathTracer<'a> {
     pub scene: &'a dyn Hittable,
@@ -105,7 +254,8 @@ impl SkyModel {
 }
 
 impl<'a> PathTracer<'a> {
-    /// Traces a single ray recursively through the scene.
+    /// Traces a single ray recursively through the scene, accumulating
+    /// radiance from emissive surfaces and scattered light.
     fn trace_ray(&self, ray: &Ray, depth: u32, rng: &mut SmallRng) -> Color {
         if depth >= self.config.max_bounces {
             return Color::zero();
@@ -127,7 +277,8 @@ impl<'a> PathTracer<'a> {
     }
 
     /// Renders the full image into a framebuffer with stratified pixel sampling.
-    pub fn render(&self) -> Framebuffer {
+    /// Returns both the framebuffer and render statistics.
+    pub fn render(&self) -> (Framebuffer, RenderStats) {
         let w = self.config.width;
         let h = self.config.height;
         let spp = self.config.samples_per_pixel;
@@ -135,8 +286,8 @@ impl<'a> PathTracer<'a> {
         let mut rng = SmallRng::from_entropy();
 
         let total = w * h;
-        let mut done = 0u32;
-        let mut last_pct = 0u32;
+        let mut progress = ProgressBar::new(total);
+        let t0 = std::time::Instant::now();
 
         for y in (0..h).rev() {
             for x in 0..w {
@@ -149,22 +300,31 @@ impl<'a> PathTracer<'a> {
                 }
                 pixel_color /= spp as f64;
 
+                // Apply tone mapping in linear space before gamma correction
+                pixel_color = self.config.tone_map.apply(pixel_color);
+
                 if self.config.gamma {
                     pixel_color = pixel_color.gamma_correct();
                 }
 
                 fb.set(x, h - 1 - y, pixel_color);
-
-                done += 1;
-                let pct = done * 100 / total;
-                if pct != last_pct {
-                    eprint!("\r  Rendering: {pct}%");
-                    last_pct = pct;
-                }
+                progress.tick();
             }
         }
-        eprintln!("\r  Rendering: done.     ");
-        fb
+        progress.finish();
+
+        let elapsed = t0.elapsed();
+        let total_rays = w as u64 * h as u64 * spp as u64;
+
+        let stats = RenderStats {
+            total_rays,
+            elapsed_secs: elapsed.as_secs_f64(),
+            width: w,
+            height: h,
+            spp,
+        };
+
+        (fb, stats)
     }
 }
 
@@ -233,13 +393,13 @@ fn display_ascii(out: &mut impl Write, fb: &Framebuffer) {
 }
 
 /// Braille pattern rendering — each Unicode braille char (U+2800..U+28FF) encodes
-/// a 2x4 dot matrix, achieving 2x horizontal and 4x vertical subpixel resolution.
+/// a 2x4 dot matrix, achieving 2× horizontal and 4× vertical subpixel resolution.
 ///
 /// Dot-to-bit mapping (Unicode standard):
 ///   ┌───┐
-///   │ 0 3 │    Bits 0-5 map to dots 0-5
-///   │ 1 4 │    Bit 6 → dot 6
-///   │ 2 5 │    Bit 7 → dot 7
+///   │ 0 3 │    Bits 0-5 → dots 0-5
+///   │ 1 4 │    Bit 6   → dot 6
+///   │ 2 5 │    Bit 7   → dot 7
 ///   │ 6 7 │
 ///   └───┘
 fn display_braille(out: &mut impl Write, fb: &Framebuffer) {
