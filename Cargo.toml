@@ -1,0 +1,23 @@
+[package]
+name = "photon-cli"
+version = "0.1.0"
+edition = "2021"
+authors = ["NORMAL-EX"]
+description = "A blazingly fast terminal ray tracer — render 3D scenes right in your terminal using Unicode braille patterns and ANSI true color"
+license = "MIT"
+repository = "https://github.com/NORMAL-EX/photon-cli"
+keywords = ["raytracer", "terminal", "3d", "rendering", "graphics"]
+categories = ["command-line-utilities", "graphics", "rendering"]
+rust-version = "1.75"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+crossterm = "0.28"
+rand = { version = "0.8", features = ["small_rng"] }
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true
+panic = "abort"
