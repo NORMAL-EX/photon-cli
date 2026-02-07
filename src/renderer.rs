@@ -146,7 +146,7 @@ impl Framebuffer {
 
 // ─── Render Statistics ──────────────────────────────────────────────────────
 
-/// Aggregate statistics collected during rendering for diagnostic output.
+/// Aggregate statistics collected during the rendering pass for diagnostic output.
 pub struct RenderStats {
     pub total_rays: u64,
     pub elapsed_secs: f64,
