@@ -403,6 +403,7 @@ fn display_ascii(out: &mut impl Write, fb: &Framebuffer) {
 ///   │ 2 5 │    Bit 7   → dot 7
 ///   │ 6 7 │
 ///   └───┘
+/// Renders framebuffer using Unicode braille characters for maximum terminal resolution.
 fn display_braille(out: &mut impl Write, fb: &Framebuffer) {
     let cell_w = 2u32;
     let cell_h = 4u32;
