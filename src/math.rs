@@ -135,6 +135,7 @@ impl Vec3 {
     /// Applies the sRGB gamma curve (γ = 2.2 approximated as sqrt) for perceptually
     /// correct display on standard monitors / terminals with true-color support.
     #[inline(always)]
+    /// Applies sRGB gamma correction (linear → sRGB, γ = 2.2 approximation).
     pub fn gamma_correct(self) -> Self {
         Self::new(self.x.sqrt(), self.y.sqrt(), self.z.sqrt())
     }
