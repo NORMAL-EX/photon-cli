@@ -392,7 +392,7 @@ fn display_ascii(out: &mut impl Write, fb: &Framebuffer) {
     }
 }
 
-/// Braille pattern rendering — each Unicode braille char (U+2800..U+28FF) encodes
+/// Braille pattern rendering — Each Unicode Braille character (U+2800..U+28FF) encodes
 /// a 2x4 dot matrix, achieving 2× horizontal and 4× vertical subpixel resolution.
 ///
 /// Dot-to-bit mapping (Unicode standard):
