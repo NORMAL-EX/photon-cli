@@ -261,7 +261,7 @@ impl<'a> PathTracer<'a> {
             return Color::zero();
         }
 
-        // t_min = 0.001 to prevent shadow acne from floating-point self-intersection
+        // t_min = 0.001 prevents shadow acne caused by floating-point self-intersection
         if let Some(hit) = self.scene.hit(ray, 0.001, f64::INFINITY) {
             let emitted = hit.material.emitted();
 
