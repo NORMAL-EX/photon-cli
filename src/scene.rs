@@ -658,7 +658,7 @@ impl BvhNode {
         }
     }
 
-    /// Returns the total number of leaf nodes in the BVH.
+    /// Returns the total number of leaf (primitive) nodes in the BVH.
     pub fn leaf_count(&self) -> usize {
         match self {
             BvhNode::Leaf { .. } => 1,
