@@ -10,7 +10,7 @@ photon-cli solves the **rendering equation** using stochastic ray tracing, produ
 
 ## ✨ Features
 
-- **Physically-Based Rendering** — Full path tracing with the rendering equation: $L_o = L_e + \int f_r \cdot L_i \cdot \cos\theta \, d\omega$
+- **Physically-Based Rendering** — Full path tracing solving the rendering equation: $L_o = L_e + \int_{\Omega} f_r \cdot L_i \cdot \cos\theta \, d\omega$
 - **Material System** — Lambertian diffuse, specular metals (Cook-Torrance), dielectrics with Schlick-Fresnel, emissive area lights, procedural checkerboard, and normal-driven gradients
 - **Geometry Primitives** — Sphere, Plane, Triangle (Möller–Trumbore), Quad (parametric rectangle), Disk
 - **BVH Acceleration** — $O(\log n)$ ray queries via bounding volume hierarchy with midpoint-split heuristic
