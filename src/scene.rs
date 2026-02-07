@@ -226,7 +226,7 @@ impl Material for Checkerboard {
 
 // ─── Gradient Material ──────────────────────────────────────────────────────
 
-/// A procedural material that interpolates between two colors based on surface
+/// A procedural material that smoothly interpolates between two colors based on surface
 /// normal orientation. Produces a smooth gradient effect driven by the dot
 /// product between the hit normal and a configurable axis direction.
 pub struct GradientMaterial {
