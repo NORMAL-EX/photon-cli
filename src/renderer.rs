@@ -177,7 +177,7 @@ impl RenderStats {
 
 // ─── Progress Reporter ──────────────────────────────────────────────────────
 
-/// A progress bar that renders to stderr with percentage, ETA, and a visual
+/// A Unicode progress bar that renders to stderr with percentage, ETA, and a visual
 /// bar using Unicode block characters for smooth sub-character progress.
 struct ProgressBar {
     total: u32,
