@@ -175,6 +175,7 @@ impl Vec3 {
     /// Cosine-weighted hemisphere sampling via rejection + normalization.
     /// Produces directions distributed proportionally to cos(θ), which is
     /// the optimal importance sampling strategy for Lambertian BRDFs.
+    /// Generates a random unit vector via rejection sampling on the unit sphere.
     pub fn random_unit_vector(rng: &mut dyn rand::RngCore) -> Self {
         Self::random_in_unit_sphere(rng).normalized()
     }
