@@ -459,7 +459,7 @@ impl Hittable for Triangle {
 /// A finite rectangle defined by two edge vectors and an origin point.
 /// Parameterized as: P = origin + u·edge_u + v·edge_v, for (u, v) ∈ [0,1]².
 ///
-/// Hit detection: implicit plane equation → parametric bounds check on (u,v).
+/// Hit detection: implicit plane equation followed by parametric bounds check on (u,v).
 pub struct Quad {
     pub origin: Point3,
     pub edge_u: Vec3,
