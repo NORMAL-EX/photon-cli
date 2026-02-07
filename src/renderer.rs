@@ -57,7 +57,7 @@ pub enum ToneMapOp {
     /// compresses highlights while preserving shadow detail. Works well
     /// for scenes with moderate dynamic range.
     Reinhard,
-    /// ACES filmic tone mapping (Narkowicz 2015 fit). The Academy Color
+    /// ACES filmic tone mapping (Narkowicz 2015 approximation). The Academy Color
     /// Encoding System curve used in film production — produces rich,
     /// cinematic colors with a characteristic S-curve that lifts shadows
     /// and rolls off highlights smoothly.
