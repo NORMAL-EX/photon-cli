@@ -547,7 +547,7 @@ impl Hittable for Quad {
 
 // ─── Disk ───────────────────────────────────────────────────────────────────
 
-/// A circular disk primitive. Ray-plane intersection followed by radius check.
+/// A circular disk primitive defined by center, normal, and radius. Ray-plane intersection followed by radius check.
 pub struct Disk {
     pub center: Point3,
     pub normal: Vec3,
