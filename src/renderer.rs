@@ -53,7 +53,7 @@ pub enum OutputMode {
 pub enum ToneMapOp {
     /// No tone mapping — clamp to [0,1] directly.
     None,
-    /// Reinhard global operator: L_d = L / (1 + L). Simple and robust,
+    /// Reinhard global operator (2002): L_d = L / (1 + L). Simple and robust,
     /// compresses highlights while preserving shadow detail. Works well
     /// for scenes with moderate dynamic range.
     Reinhard,
