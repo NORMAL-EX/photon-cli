@@ -65,7 +65,7 @@ pub enum ToneMapOp {
 }
 
 impl ToneMapOp {
-    /// Applies the tone mapping operator to a linear HDR color value.
+    /// Applies the selected tone mapping operator to a linear HDR color value.
     pub fn apply(self, color: Color) -> Color {
         match self {
             ToneMapOp::None => color,
