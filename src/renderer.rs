@@ -126,7 +126,7 @@ impl Framebuffer {
     }
 
     /// Export the framebuffer as a PPM (Portable Pixmap) image file.
-    /// PPM P6 format: binary RGB, one byte per channel, no compression.
+    /// PPM P6 binary format: RGB triplets, one byte per channel, no compression.
     /// This produces a lossless image that can be viewed with most image
     /// viewers or converted to PNG/JPEG with ImageMagick.
     pub fn write_ppm(&self, path: &str) -> io::Result<()> {
