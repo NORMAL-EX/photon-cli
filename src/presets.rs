@@ -394,6 +394,7 @@ fn build_gallery() -> SceneDescription {
     }
 }
 
+/// Generates a stress-test scene with 500 random spheres to exercise BVH performance.
 fn build_stress() -> SceneDescription {
     let mut objects: Vec<Box<dyn Hittable>> = Vec::new();
     let mut rng = rand::thread_rng();
