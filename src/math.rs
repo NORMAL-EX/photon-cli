@@ -97,6 +97,7 @@ impl Vec3 {
     /// when the discriminant is negative, which occurs at grazing angles when
     /// transitioning from a denser to a rarer medium (η > 1).
     #[inline]
+    /// Computes refracted direction via Snell's law.
     pub fn refract(self, normal: Self, eta_ratio: f64) -> Option<Self> {
         let cos_theta = (-self).dot(normal).min(1.0);
         let r_perp = (self + normal * cos_theta) * eta_ratio;
