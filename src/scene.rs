@@ -375,7 +375,7 @@ impl Hittable for Plane {
     }
 }
 
-// ─── Triangle (Möller–Trumbore) ─────────────────────────────────────────────
+// ─── Triangle (Möller–Trumbore 1997) ──────────────────────────────────────────
 
 #[allow(dead_code)]
 pub struct Triangle {
