@@ -21,6 +21,7 @@ pub struct Camera {
 
 /// Configuration builder for the camera, following the builder pattern
 /// to allow incremental, readable camera setup.
+/// Configuration for the thin-lens camera model with depth-of-field.
 pub struct CameraConfig {
     pub look_from: Point3,
     pub look_at: Point3,
