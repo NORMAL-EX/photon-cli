@@ -32,6 +32,7 @@ impl Default for RenderConfig {
     }
 }
 
+/// Terminal output encoding modes with varying resolution and color support.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum OutputMode {
     /// Unicode braille patterns (2x4 dots per cell) with ANSI true-color.
