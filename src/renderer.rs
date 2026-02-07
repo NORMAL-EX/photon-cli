@@ -233,6 +233,7 @@ pub struct PathTracer<'a> {
 
 #[derive(Debug, Clone, Copy)]
 #[allow(dead_code)]
+/// Environment lighting model for rays that escape the scene geometry.
 pub enum SkyModel {
     Gradient { horizon: Color, zenith: Color },
     Solid(Color),
