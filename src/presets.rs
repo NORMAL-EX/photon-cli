@@ -278,7 +278,7 @@ fn build_minimal() -> SceneDescription {
     }
 }
 
-/// Gallery scene — demonstrates every geometry type and material in one frame.
+/// Gallery scene — showcases every geometry type and material in one frame.
 /// Features Quad backdrop, Disk platform, Gradient material, and mixed objects
 /// arranged in an aesthetically pleasing composition.
 #[allow(clippy::vec_init_then_push)]
